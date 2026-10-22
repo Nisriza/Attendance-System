@@ -1,0 +1,8 @@
+{
+  "name": "Student Attendance & Reporting System",
+  "description": "Student attendance & reporting system with GPS location verification, report submissions, and coursework audit tracking.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
