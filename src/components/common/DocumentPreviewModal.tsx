@@ -23,6 +23,21 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [imageError, setImageError] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+
+  const handleDownload = async () => {
+    if (!attachment || downloading) return;
+    setDownloading(true);
+    setDownloadError(null);
+    try {
+      await api.downloadAttachment(reportId, attachment.id, attachment.original_name);
+    } catch (err: any) {
+      setDownloadError(err.message || 'Download failed. Please try again.');
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   useEffect(() => {
     if (!isOpen || !attachment) {
@@ -66,7 +81,6 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
     attachment.mime_type.includes('pdf') || /\.pdf$/i.test(attachment.original_name);
 
   const previewUrl = api.getAttachmentPreviewUrl(reportId, attachment.id);
-  const downloadUrl = api.getAttachmentDownloadUrl(reportId, attachment.id);
 
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
@@ -93,14 +107,19 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <a
-              href={downloadUrl}
-              download={attachment.original_name}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors shadow-xs"
+            <button
+              type="button"
+              onClick={handleDownload}
+              disabled={downloading}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl transition-colors shadow-xs disabled:opacity-60"
             >
-              <Download className="w-3.5 h-3.5" />
-              Download File
-            </a>
+              {downloading ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Download className="w-3.5 h-3.5" />
+              )}
+              {downloading ? 'Downloading...' : 'Download File'}
+            </button>
             <button
               onClick={onClose}
               className="text-slate-400 hover:text-slate-700 p-2 rounded-xl hover:bg-slate-100 transition-colors"
@@ -112,6 +131,12 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
 
         {/* Content Viewer Body */}
         <div className="flex-1 overflow-auto p-6 bg-slate-50/40 min-h-[380px] flex items-center justify-center relative">
+          {downloadError && (
+            <div className="absolute top-3 left-3 right-3 z-10 p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2 text-xs text-rose-800">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <span className="leading-relaxed">{downloadError}</span>
+            </div>
+          )}
           {loading && (
             <div className="flex flex-col items-center gap-2 text-slate-500">
               <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
@@ -124,14 +149,19 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
               <AlertCircle className="w-8 h-8 text-rose-500 mx-auto mb-2" />
               <h4 className="font-bold text-rose-900 text-sm">Preview Unavailable</h4>
               <p className="text-xs text-rose-700 mt-1">{error}</p>
-              <a
-                href={downloadUrl}
-                download={attachment.original_name}
-                className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-rose-600 text-white rounded-xl hover:bg-rose-700 shadow-xs"
+              <button
+                type="button"
+                onClick={handleDownload}
+                disabled={downloading}
+                className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-rose-600 text-white rounded-xl hover:bg-rose-700 shadow-xs disabled:opacity-60"
               >
-                <Download className="w-3.5 h-3.5" />
-                Download Original File
-              </a>
+                {downloading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Download className="w-3.5 h-3.5" />
+                )}
+                {downloading ? 'Downloading...' : 'Download Original File'}
+              </button>
             </div>
           )}
 
@@ -152,14 +182,19 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
                   <p className="text-xs text-rose-700 mt-1">
                     The image was stored securely on the server. You can download the original file directly to view it on your device.
                   </p>
-                  <a
-                    href={downloadUrl}
-                    download={attachment.original_name}
-                    className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-blue-600 text-white rounded-xl hover:bg-blue-700 shadow-xs"
+                  <button
+                    type="button"
+                    onClick={handleDownload}
+                    disabled={downloading}
+                    className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-blue-600 text-white rounded-xl hover:bg-blue-700 shadow-xs disabled:opacity-60"
                   >
-                    <Download className="w-3.5 h-3.5" />
-                    Download {attachment.original_name}
-                  </a>
+                    {downloading ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Download className="w-3.5 h-3.5" />
+                    )}
+                    {downloading ? 'Downloading...' : `Download ${attachment.original_name}`}
+                  </button>
                 </div>
               ) : (
                 <img
@@ -205,14 +240,19 @@ export const DocumentPreviewModal: React.FC<DocumentPreviewModalProps> = ({
               <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
                 This file ({attachment.mime_type || 'Office/Binary Document'}) is stored securely in the university repository.
               </p>
-              <a
-                href={downloadUrl}
-                download={attachment.original_name}
-                className="mt-5 inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition-colors"
+              <button
+                type="button"
+                onClick={handleDownload}
+                disabled={downloading}
+                className="mt-5 inline-flex items-center gap-2 px-4 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition-colors disabled:opacity-60"
               >
-                <Download className="w-4 h-4" />
-                Download ({formatFileSize(attachment.file_size)})
-              </a>
+                {downloading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Download className="w-4 h-4" />
+                )}
+                {downloading ? 'Downloading...' : `Download (${formatFileSize(attachment.file_size)})`}
+              </button>
             </div>
           )}
         </div>

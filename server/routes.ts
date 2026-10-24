@@ -842,9 +842,14 @@ async function sendAttachment(
   attachment: ReportAttachment,
   disposition: 'attachment' | 'inline'
 ) {
+  // RFC 5987: ASCII-safe fallback plus UTF-8 filename* so the original
+  // filename (spaces, Unicode) is preserved exactly on download.
+  const asciiFallback = attachment.original_name
+    .replace(/[^\x20-\x7E]/g, '_')
+    .replace(/["\\]/g, '_');
   res.setHeader(
     'Content-Disposition',
-    `${disposition}; filename="${encodeURIComponent(attachment.original_name)}"`
+    `${disposition}; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(attachment.original_name)}`
   );
   res.setHeader('Content-Type', inferMimeType(attachment.original_name, attachment.mime_type));
 

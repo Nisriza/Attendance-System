@@ -244,6 +244,46 @@ export const api = {
     return `/api/reports/${reportId}/attachments/${attachmentId}/download?auth=${encodeURIComponent(token || '')}`;
   },
 
+  // Fetches the file with auth headers and triggers the browser's native
+  // download flow via a temporary object URL — works on desktop and mobile,
+  // and preserves the original filename/extension.
+  async downloadAttachment(reportId: string, attachmentId: string, filename: string): Promise<void> {
+    const token = getStoredToken();
+    const headers = new Headers();
+    if (token) headers.set('Authorization', `Bearer ${token}`);
+
+    const response = await fetch(
+      `/api/reports/${reportId}/attachments/${attachmentId}/download`,
+      { headers }
+    );
+
+    if (!response.ok) {
+      let message = 'Download failed. Please try again.';
+      const contentType = response.headers.get('content-type');
+      try {
+        if (contentType && contentType.includes('application/json')) {
+          const data = await response.json();
+          if (data?.error) message = data.error;
+        } else {
+          const text = await response.text();
+          if (text) message = text;
+        }
+      } catch (_) {}
+      throw new Error(message);
+    }
+
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = filename;
+    link.rel = 'noopener';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+  },
+
   getAttachmentPreviewUrl(reportId: string, attachmentId: string): string {
     const token = getStoredToken();
     return `/api/reports/${reportId}/attachments/${attachmentId}/preview?auth=${encodeURIComponent(token || '')}`;

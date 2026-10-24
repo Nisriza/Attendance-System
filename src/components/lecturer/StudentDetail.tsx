@@ -20,6 +20,7 @@ import { api } from '../../services/api.ts';
 import { User, AttendanceRecord, ReportSubmission, ReportAttachment } from '../../types/index.ts';
 import { MapViewModal } from '../common/MapViewModal.tsx';
 import { DocumentPreviewModal } from '../common/DocumentPreviewModal.tsx';
+import { useToast } from '../common/Toast.tsx';
 
 interface StudentDetailProps {
   studentId: string;
@@ -27,10 +28,24 @@ interface StudentDetailProps {
 }
 
 export const StudentDetail: React.FC<StudentDetailProps> = ({ studentId, onBack }) => {
+  const { showToast } = useToast();
   const [student, setStudent] = useState<User | null>(null);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [reports, setReports] = useState<ReportSubmission[]>([]);
   const [loading, setLoading] = useState(true);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  const handleDownload = async (reportId: string, att: ReportAttachment) => {
+    if (downloadingId) return;
+    setDownloadingId(att.id);
+    try {
+      await api.downloadAttachment(reportId, att.id, att.original_name);
+    } catch (err: any) {
+      showToast(err.message || 'Download failed. Please try again.', 'error');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   // Modals
   const [mapModal, setMapModal] = useState<{
@@ -370,14 +385,19 @@ export const StudentDetail: React.FC<StudentDetailProps> = ({ studentId, onBack 
                           >
                             <Eye className="w-3.5 h-3.5" />
                           </button>
-                          <a
-                            href={api.getAttachmentDownloadUrl(report.id, att.id)}
-                            download={att.original_name}
-                            className="p-1 text-slate-500 hover:text-emerald-600 rounded-md transition-colors"
+                          <button
+                            type="button"
+                            onClick={() => handleDownload(report.id, att)}
+                            disabled={downloadingId === att.id}
+                            className="p-1 text-slate-500 hover:text-emerald-600 rounded-md transition-colors disabled:opacity-60"
                             title="Download File"
                           >
-                            <Download className="w-3.5 h-3.5" />
-                          </a>
+                            {downloadingId === att.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Download className="w-3.5 h-3.5" />
+                            )}
+                          </button>
                         </div>
                       </div>
                     ))}

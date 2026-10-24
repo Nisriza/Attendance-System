@@ -28,6 +28,19 @@ export const MySubmissionsView: React.FC = () => {
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
   const [selectedYear, setSelectedYear] = useState<string>('all');
   const { showToast } = useToast();
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  const handleDownload = async (reportId: string, att: ReportAttachment) => {
+    if (downloadingId) return;
+    setDownloadingId(att.id);
+    try {
+      await api.downloadAttachment(reportId, att.id, att.original_name);
+    } catch (err: any) {
+      showToast(err.message || 'Download failed. Please try again.', 'error');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   // Modals
   const [mapReport, setMapReport] = useState<ReportSubmission | null>(null);
@@ -281,14 +294,19 @@ export const MySubmissionsView: React.FC = () => {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        <a
-                          href={api.getAttachmentDownloadUrl(rep.id, att.id)}
-                          download={att.original_name}
-                          className="p-1.5 text-slate-600 hover:text-emerald-600 hover:bg-white rounded-lg transition-colors shadow-2xs"
+                        <button
+                          type="button"
+                          onClick={() => handleDownload(rep.id, att)}
+                          disabled={downloadingId === att.id}
+                          className="p-1.5 text-slate-600 hover:text-emerald-600 hover:bg-white rounded-lg transition-colors shadow-2xs disabled:opacity-60"
                           title="Download original file"
                         >
-                          <Download className="w-4 h-4" />
-                        </a>
+                          {downloadingId === att.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Download className="w-4 h-4" />
+                          )}
+                        </button>
                       </div>
                     </div>
                   ))}

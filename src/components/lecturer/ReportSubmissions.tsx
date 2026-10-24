@@ -18,12 +18,27 @@ import { DocumentPreviewModal } from '../common/DocumentPreviewModal.tsx';
 import { MonthYearFilter } from '../common/MonthYearFilter.tsx';
 import { isInMonthYear, monthYearLabel } from '../../utils/datetime.ts';
 import { buildSubmissionAudit } from '../../utils/audit.ts';
+import { useToast } from '../common/Toast.tsx';
 
 export const ReportSubmissions: React.FC = () => {
+  const { showToast } = useToast();
   const [reports, setReports] = useState<ReportSubmission[]>([]);
   const [students, setStudents] = useState<User[]>([]);
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
+  const handleDownload = async (reportId: string, att: ReportAttachment) => {
+    if (downloadingId) return;
+    setDownloadingId(att.id);
+    try {
+      await api.downloadAttachment(reportId, att.id, att.original_name);
+    } catch (err: any) {
+      showToast(err.message || 'Download failed. Please try again.', 'error');
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   // Filters
   const [selectedStudentId, setSelectedStudentId] = useState<string>('all');
@@ -338,14 +353,19 @@ export const ReportSubmissions: React.FC = () => {
                         >
                           <Eye className="w-4 h-4" />
                         </button>
-                        <a
-                          href={api.getAttachmentDownloadUrl(rep.id, att.id)}
-                          download={att.original_name}
-                          className="p-1.5 text-slate-600 hover:text-emerald-600 hover:bg-white rounded-lg transition-colors shadow-2xs"
+                        <button
+                          type="button"
+                          onClick={() => handleDownload(rep.id, att)}
+                          disabled={downloadingId === att.id}
+                          className="p-1.5 text-slate-600 hover:text-emerald-600 hover:bg-white rounded-lg transition-colors shadow-2xs disabled:opacity-60"
                           title="Download original file"
                         >
-                          <Download className="w-4 h-4" />
-                        </a>
+                          {downloadingId === att.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Download className="w-4 h-4" />
+                          )}
+                        </button>
                       </div>
                     </div>
                   ))}
