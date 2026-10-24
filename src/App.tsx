@@ -37,7 +37,7 @@ export default function App() {
   return (
     <div>
       {!user ? (
-        <form onSubmit={handleログイン}> {/* or onSubmit={handleLogin} */}
+        <form onSubmit={handleLogin}> {/* or onSubmit={handleLogin} */}
           <h2>Student Login</h2>
           <input 
             type="text" 
