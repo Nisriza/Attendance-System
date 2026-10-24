@@ -12,27 +12,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    // 1. Get the name from the request body
     const { name } = req.body;
 
     if (!name) {
       return res.status(400).json({ error: 'Full name is required' });
     }
 
-    // 2. Clean input in JavaScript (Valid JS syntax)
+    // Clean input to safely match casing and spacing
     const cleanInputName = name.trim().toLowerCase();
 
-    // 3. Query Supabase safely using .ilike() for case-insensitive matching
+    // Query the 'users' table using the 'name' column
     const { data, error } = await supabase
-      .from('students') // Make sure this matches your actual table name in Supabase
+      .from('users')
       .select('*')
-      .ilike('name', cleanInputName); // Matches the 'name' column ignoring casing
+      .ilike('name', cleanInputName);
 
     if (error) {
       throw error;
     }
 
-    // 4. Check if a student was found
+    // Check if a user/student was found
     if (!data || data.length === 0) {
       return res.status(401).json({ error: 'Student login failed: no match found with fullname' });
     }
@@ -41,9 +40,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ 
       success: true, 
       message: 'Logged in successfully',
-      student: data[0] 
+      user: data[0] 
     });
 
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+}
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
   }
