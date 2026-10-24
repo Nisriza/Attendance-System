@@ -1,58 +1,167 @@
-import React, { useState } from 'react';
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
 
-export default function App() {
-  const [enteredName, setEnteredName] = useState('');
-  const [user, setUser] = useState(null); // or whatever state tracks if logged in
+import React, { useState, useEffect } from 'react';
+import { AuthProvider, useAuth } from './context/AuthContext.tsx';
+import { ToastProvider } from './components/common/Toast.tsx';
+import { Navbar } from './components/common/Navbar.tsx';
+import { Sidebar } from './components/common/Sidebar.tsx';
+import { OfflineIndicator } from './components/common/OfflineIndicator.tsx';
+import { PWAInstallBanner } from './components/common/PWAInstallBanner.tsx';
 
-  // 1. Put the handleLogin function here
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: enteredName })
-      });
+// Auth Components
+import { LoginForm } from './components/auth/LoginForm.tsx';
 
-      const data = await response.json();
+// Lecturer Components
+import { LecturerDashboard } from './components/lecturer/LecturerDashboard.tsx';
+import { MyStudents } from './components/lecturer/MyStudents.tsx';
+import { RegisterStudentView } from './components/lecturer/RegisterStudentView.tsx';
+import { AttendanceRecords } from './components/lecturer/AttendanceRecords.tsx';
+import { DeviceAudit } from './components/lecturer/DeviceAudit.tsx';
+import { ReportSubmissions } from './components/lecturer/ReportSubmissions.tsx';
+import { LecturerProfile } from './components/lecturer/LecturerProfile.tsx';
 
-      if (data.success) {
-        // Save user data to localStorage
-        localStorage.setItem('user', JSON.stringify(data.user));
-        setUser(data.user); // update state if you use it for rendering dashboard
-        
-        // If your app uses state-based rendering instead of routing:
-        // (You can also do window.location.reload() or navigate here)
-      } else {
-        alert(data.error);
-      }
-    } catch (err) {
-      console.error('Login error:', err);
-      alert('Login failed. Please try again.');
+// Student Components
+import { StudentDashboard } from './components/student/StudentDashboard.tsx';
+import { MarkAttendanceView } from './components/student/MarkAttendanceView.tsx';
+import { SubmitReportView } from './components/student/SubmitReportView.tsx';
+import { MyAttendanceView } from './components/student/MyAttendanceView.tsx';
+import { MySubmissionsView } from './components/student/MySubmissionsView.tsx';
+import { StudentProfile } from './components/student/StudentProfile.tsx';
+
+import { Loader2 } from 'lucide-react';
+
+function MainApp() {
+  const { user, loading } = useAuth();
+  const [currentView, setCurrentView] = useState<string>('dashboard');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [postReportNoteVisible, setPostReportNoteVisible] = useState(false);
+
+  useEffect(() => {
+    // Reset view to dashboard upon user change
+    setCurrentView('dashboard');
+  }, [user?.id, user?.role]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#F5F9FF] flex flex-col items-center justify-center gap-3">
+        <Loader2 className="w-8 h-8 animate-spin text-[#173B70]" />
+        <span className="text-xs font-semibold text-slate-500">
+          Initializing Student Attendance & Reporting System...
+        </span>
+      </div>
+    );
+  }
+
+  // Not logged in: Show Login Screen (Public registration deleted)
+  if (!user) {
+    return <LoginForm />;
+  }
+
+  // Lecturer Views
+  const renderLecturerView = () => {
+    switch (currentView) {
+      case 'dashboard':
+        return <LecturerDashboard onNavigate={(v) => setCurrentView(v)} />;
+      case 'students':
+        return <MyStudents onNavigateRegister={() => setCurrentView('register_student')} />;
+      case 'register_student':
+        return (
+          <RegisterStudentView
+            onBack={() => setCurrentView('students')}
+            onSuccess={() => {}}
+          />
+        );
+      case 'attendance_records':
+        return <AttendanceRecords />;
+      case 'device_audit':
+        return <DeviceAudit />;
+      case 'report_submissions':
+        return <ReportSubmissions />;
+      case 'profile':
+        return <LecturerProfile />;
+      default:
+        return <LecturerDashboard onNavigate={(v) => setCurrentView(v)} />;
     }
   };
 
-  // 2. Attach it to your form's onSubmit or button's onClick:
-  return (
-    <div>
-      {!user ? (
-        <form onSubmit={handleLogin}> {/* or onSubmit={handleLogin} */}
-          <h2>Student Login</h2>
-          <input 
-            type="text" 
-            placeholder="Enter full name" 
-            value={enteredName} 
-            onChange={(e) => setEnteredName(e.target.value)} 
+  // Student Views
+  const renderStudentView = () => {
+    switch (currentView) {
+      case 'dashboard':
+        return (
+          <StudentDashboard
+            onNavigate={(v) => setCurrentView(v)}
           />
-          <button type="submit">Login</button>
-        </form>
-      ) : (
-        <div>
-          <h1>Welcome, {user.name}!</h1>
-          {/* Your Dashboard components go here */}
-        </div>
-      )}
+        );
+      case 'mark_attendance':
+        return (
+          <MarkAttendanceView
+            showPostReportNote={postReportNoteVisible}
+            onDismissPostReportNote={() => setPostReportNoteVisible(false)}
+            onSuccessNavigateToReport={() => {
+              setCurrentView('submit_report');
+            }}
+          />
+        );
+      case 'submit_report':
+        return (
+          <SubmitReportView
+            onReportSubmitted={() => {
+              setPostReportNoteVisible(true);
+              setCurrentView('mark_attendance');
+            }}
+            onNavigateToAttendance={() => setCurrentView('mark_attendance')}
+            onNavigateToSubmissions={() => setCurrentView('my_submissions')}
+          />
+        );
+      case 'my_attendance':
+        return <MyAttendanceView />;
+      case 'my_submissions':
+        return <MySubmissionsView />;
+      case 'profile':
+        return <StudentProfile />;
+      default:
+        return <StudentDashboard onNavigate={(v) => setCurrentView(v)} />;
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-[#F5F9FF] flex">
+      {/* Sidebar Navigation */}
+      <Sidebar
+        currentView={currentView}
+        onSelectView={(v) => setCurrentView(v)}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
+
+      {/* Main Content Area */}
+      <div className="flex-1 lg:pl-64 flex flex-col min-w-0">
+        <Navbar
+          onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
+          currentView={currentView}
+        />
+
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+          {user.role === 'lecturer' ? renderLecturerView() : renderStudentView()}
+        </main>
+      </div>
     </div>
   );
 }
+
+export default function App() {
+  return (
+    <ToastProvider>
+      <AuthProvider>
+        <MainApp />
+        <PWAInstallBanner />
+        <OfflineIndicator />
+      </AuthProvider>
+    </ToastProvider>
+  );
+}
+         
