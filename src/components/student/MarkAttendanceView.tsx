@@ -465,20 +465,20 @@ export const MarkAttendanceView: React.FC<MarkAttendanceViewProps> = ({
       </div>
 
       {showPostReportNote && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/50">
+          <div className="bg-white rounded-2xl sm:rounded-3xl w-full max-w-sm sm:max-w-md max-h-[90vh] overflow-y-auto p-4 sm:p-6 shadow-xl space-y-3 sm:space-y-4">
             <div className="flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-blue-600" />
-              <h3 className="text-base font-bold text-slate-900">Important clock-out notice</h3>
+              <ShieldCheck className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 shrink-0" />
+              <h3 className="text-sm sm:text-base font-bold text-slate-900">Important clock-out notice</h3>
             </div>
-            <p className="text-sm text-slate-600 leading-relaxed">
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed break-words">
               Students not under auto-debit payment mode or claiming through Borang R9 must clock in
               and clock out within the UMS vicinity.
             </p>
             <button
               type="button"
               onClick={() => onDismissPostReportNote?.()}
-              className="w-full py-2.5 rounded-xl text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+              className="w-full py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors"
             >
               OK
             </button>

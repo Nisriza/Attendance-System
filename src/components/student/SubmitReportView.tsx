@@ -15,10 +15,11 @@ import {
   UserCheck,
 } from 'lucide-react';
 import { api } from '../../services/api.ts';
-import { AttendanceRecord } from '../../types/index.ts';
+import { AttendanceRecord, ReportSubmission } from '../../types/index.ts';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { useToast } from '../common/Toast.tsx';
 import { getDeviceId } from '../../utils/device.ts';
+import { attendanceDayKey } from '../../utils/datetime.ts';
 
 interface SubmitReportViewProps {
   onReportSubmitted?: () => void;
@@ -35,6 +36,7 @@ export const SubmitReportView: React.FC<SubmitReportViewProps> = ({
   const { showToast } = useToast();
 
   const [activeRecord, setActiveRecord] = useState<AttendanceRecord | null>(null);
+  const [alreadySubmitted, setAlreadySubmitted] = useState(false);
   const [supervisorName, setSupervisorName] = useState<string>('Academic Supervisor');
   const [supervisorDept, setSupervisorDept] = useState<string>('Faculty Department');
   const [loading, setLoading] = useState(true);
@@ -50,11 +52,22 @@ export const SubmitReportView: React.FC<SubmitReportViewProps> = ({
 
   const loadData = async () => {
     try {
-      const [activeData, lecs] = await Promise.all([
+      const [activeData, lecs, studentReports] = await Promise.all([
         api.getActiveClockIn(),
         api.getLecturers(),
+        api.getReports(),
       ]);
       setActiveRecord(activeData.activeRecord);
+
+      // Duplicate guard: a report submitted today (or flagged on the active record)
+      // blocks the form entirely.
+      const today = attendanceDayKey();
+      const submittedToday =
+        Boolean(activeData.activeRecord?.report_submitted) ||
+        (studentReports as ReportSubmission[]).some(
+          (rep) => attendanceDayKey(rep.submitted_at) === today
+        );
+      setAlreadySubmitted(submittedToday);
 
       if (user?.lecturer_id) {
         const found = lecs.find((l) => l.id === user.lecturer_id);
@@ -148,7 +161,11 @@ export const SubmitReportView: React.FC<SubmitReportViewProps> = ({
       // Auto-navigate to clock-out with the mandatory notice
       if (onReportSubmitted) onReportSubmitted();
     } catch (err: any) {
-      setError(err.message || 'Failed to submit report.');
+      const message = err.message || 'Failed to submit report.';
+      setError(message);
+      if (message.includes('already been submitted')) {
+        setAlreadySubmitted(true);
+      }
     } finally {
       setSubmitting(false);
       setSubmissionProgress(null);
@@ -167,7 +184,7 @@ export const SubmitReportView: React.FC<SubmitReportViewProps> = ({
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
       {/* Header */}
-      <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-xs">
+      <div className="bg-white p-4 sm:p-8 rounded-3xl border border-slate-200 shadow-xs">
         <div className="flex items-center gap-2.5">
           <div className="w-10 h-10 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center shadow-xs">
             <FileUp className="w-5 h-5 text-blue-600" />
@@ -185,7 +202,7 @@ export const SubmitReportView: React.FC<SubmitReportViewProps> = ({
 
       {/* Success View */}
       {successReport ? (
-        <div className="bg-white p-6 sm:p-8 rounded-3xl border border-emerald-200 shadow-xs text-center space-y-4">
+        <div className="bg-white p-4 sm:p-8 rounded-3xl border border-emerald-200 shadow-xs text-center space-y-4">
           <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
             <CheckCircle2 className="w-8 h-8" />
           </div>
@@ -228,9 +245,36 @@ export const SubmitReportView: React.FC<SubmitReportViewProps> = ({
             )}
           </div>
         </div>
+      ) : alreadySubmitted ? (
+        /* GATING: REPORT ALREADY SUBMITTED TODAY */
+        <div className="bg-white p-4 sm:p-8 rounded-3xl border border-emerald-200 shadow-xs space-y-4">
+          <div className="flex items-start gap-3">
+            <ShieldCheck className="w-6 h-6 text-emerald-600 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <h3 className="text-base font-bold text-emerald-900">Report Already Submitted</h3>
+              <p className="text-xs text-emerald-800 leading-relaxed">
+                Your attendance report has already been submitted for today. You can submit a new report after clocking in tomorrow.
+              </p>
+            </div>
+          </div>
+
+          {onNavigateToSubmissions && (
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={onNavigateToSubmissions}
+                className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-xs transition-colors"
+              >
+                <FileText className="w-4 h-4" />
+                View in My Submissions
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </div>
       ) : !activeRecord ? (
         /* GATING: NOT CLOCKED IN */
-        <div className="bg-white p-6 sm:p-8 rounded-3xl border border-rose-200 shadow-xs space-y-4">
+        <div className="bg-white p-4 sm:p-8 rounded-3xl border border-rose-200 shadow-xs space-y-4">
           <div className="flex items-start gap-3">
             <ShieldAlert className="w-6 h-6 text-rose-600 shrink-0 mt-0.5" />
             <div className="space-y-1">
@@ -261,7 +305,7 @@ export const SubmitReportView: React.FC<SubmitReportViewProps> = ({
         </div>
       ) : (
         /* FORM: STUDENT IS CLOCKED IN AND READY TO SUBMIT */
-        <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-xs space-y-6">
+        <div className="bg-white p-4 sm:p-8 rounded-3xl border border-slate-200 shadow-xs space-y-6">
           {/* Active Session Lockup */}
           <div className="p-4 bg-emerald-50/70 border border-emerald-200 rounded-2xl flex items-start gap-3 text-xs text-emerald-900">
             <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />

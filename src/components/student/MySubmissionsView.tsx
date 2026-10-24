@@ -363,9 +363,9 @@ export const MySubmissionsView: React.FC = () => {
             <p className="text-xs text-slate-500 mt-2 leading-relaxed">
               Are you sure you want to remove <span className="font-semibold text-slate-800">"{deletingReport.title}"</span>?
             </p>
-            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-left text-xs text-emerald-900 mt-3 leading-relaxed">
+            <div className="p-2.5 sm:p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-left text-[11px] sm:text-xs text-emerald-900 mt-3 leading-relaxed break-words">
               <strong>Notice:</strong> Your verified GPS attendance record{' '}
-              <span className="font-mono font-semibold">({deletingReport.attendance_record_id})</span> will remain intact in the system.
+              <span className="font-mono font-semibold break-all">({deletingReport.attendance_record_id})</span> will remain intact in the system.
             </div>
 
             <div className="mt-5 flex items-center justify-end gap-2.5">

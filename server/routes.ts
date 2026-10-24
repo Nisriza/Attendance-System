@@ -561,6 +561,25 @@ apiRouter.post(
       });
     }
 
+    // 1b. The resolved record must belong to TODAY (Asia/Kuala_Lumpur) —
+    // prevents reports being attached to a previous day's attendance.
+    if (!isSameAttendanceDay(attendanceRecord.clock_in_time || attendanceRecord.server_timestamp)) {
+      cleanupTempFiles();
+      return res.status(403).json({
+        error: 'Clock-In Required. You must clock in today before submitting your report.',
+        code: 'ATTENDANCE_REQUIRED',
+      });
+    }
+
+    // 1c. Prevent duplicate daily report submissions for the same attendance record
+    if (attendanceRecord.report_submitted) {
+      cleanupTempFiles();
+      return res.status(409).json({
+        error: 'Your attendance report has already been submitted for today.',
+        code: 'REPORT_ALREADY_SUBMITTED',
+      });
+    }
+
     if (!title || !title.trim()) {
       cleanupTempFiles();
       return res.status(400).json({ error: 'Report title or task summary is required.' });
