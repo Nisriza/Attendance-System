@@ -161,6 +161,8 @@ export const MarkAttendanceView: React.FC<MarkAttendanceViewProps> = ({
       await loadAttendanceState();
     } catch (err: any) {
       setError(err.message || 'Failed to clock in.');
+      // Refresh state so a rejected duplicate immediately locks the UI
+      await loadAttendanceState();
     } finally {
       setClockingIn(false);
     }

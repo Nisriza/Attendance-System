@@ -45,6 +45,7 @@ export interface AttendanceRecord {
   status: AttendanceStatus;
   report_submitted: boolean; // Gating condition for Clock Out
   report_id?: string;
+  attendance_day?: string; // YYYY-MM-DD in ATTENDANCE_TIME_ZONE; one record per student per day
   duration_minutes?: number;
 
   // Backward compatibility fields

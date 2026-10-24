@@ -75,9 +75,12 @@ class Database {
   private async insertRow(table: string, row: object, label: string): Promise<void> {
     const { error } = await this.client().from(table).insert(row);
     if (error) {
-      // Postgres unique violation (e.g. one report per attendance record)
+      // Postgres unique violation — database-level one-per-day enforcement
       if (error.code === '23505' && table === 'reports') {
         throw new Error('Your attendance report has already been submitted for today.');
+      }
+      if (error.code === '23505' && table === 'attendance_records') {
+        throw new Error('You have already clocked in today.');
       }
       throw new Error(`Supabase ${label} insert failed: ${error.message}`);
     }

@@ -387,7 +387,7 @@ export const SubmitReportView: React.FC<SubmitReportViewProps> = ({
                     Click to select files or images from device
                   </span>
                   <span className="text-[11px] text-slate-400">
-                    JPG, PNG, PDF, Word documents, text files up to 25MB each (Max 5 files)
+                    JPG, PNG, PDF, Word documents, text files up to 4MB each (Max 5 files)
                   </span>
                 </label>
               </div>

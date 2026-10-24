@@ -4,6 +4,7 @@ import path from 'path';
 import crypto from 'crypto';
 import fs from 'fs';
 import { db, UPLOAD_DIR } from './db.js';
+import { supabase } from './supabase.js';
 import { User, AttendanceRecord, ReportSubmission, ReportAttachment } from './types.js';
 import { clientIp, cleanDeviceId, deviceLabel } from './device.js';
 import { isSameAttendanceDay, todayKey } from './time.js';
@@ -85,7 +86,8 @@ function requireApprovedStudent(req: AuthenticatedRequest, res: Response, next: 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 25 * 1024 * 1024, // 25 MB limit
+    // Vercel caps serverless request bodies at ~4.5 MB; keep uploads safely under it
+    fileSize: 4 * 1024 * 1024, // 4 MB per file
     files: 5,
   },
 });
@@ -375,11 +377,12 @@ apiRouter.post('/attendance/clock-in', requireAuth, requireApprovedStudent, asyn
   const student = req.user!;
   const { latitude, longitude, accuracy_meters } = req.body;
 
-  // 1. Prevent duplicate active clock-in
+  // 1. Prevent duplicate active clock-in (today only — a stale 'clocked_in'
+  //    record from a previous day must not block a valid new clock-in)
   const active = db.getActiveClockInForStudent(student.id);
-  if (active) {
+  if (active && isSameAttendanceDay(active.clock_in_time || active.server_timestamp)) {
     return res.status(400).json({
-      error: 'You are already clocked in. Please submit your report and clock out before starting a new session.',
+      error: 'You have already clocked in today. Please submit your report and clock out before starting a new session.',
       activeRecord: active,
     });
   }
@@ -388,9 +391,29 @@ apiRouter.post('/attendance/clock-in', requireAuth, requireApprovedStudent, asyn
   const todayRecord = db.getAttendanceByStudentOnDay(student.id);
   if (todayRecord) {
     return res.status(400).json({
-      error: 'You have already completed your attendance for today. You can clock in again tomorrow.',
+      error: 'You have already clocked in today. You can clock in again tomorrow.',
       todayRecord,
     });
+  }
+
+  // 2b. Authoritative check directly against Supabase — the in-memory cache can
+  //     be stale across concurrent serverless instances, multiple devices, or
+  //     after a re-login. The unique index on (student_id, attendance_day) is
+  //     the final backstop against simultaneous requests.
+  const dayKey = todayKey();
+  if (supabase) {
+    const { data: existing, error: lookupError } = await supabase
+      .from('attendance_records')
+      .select('id')
+      .eq('student_id', student.id)
+      .eq('attendance_day', dayKey)
+      .limit(1)
+      .maybeSingle();
+    if (!lookupError && existing) {
+      return res.status(400).json({
+        error: 'You have already clocked in today. You can clock in again tomorrow.',
+      });
+    }
   }
 
   // 3. Validate GPS coordinates
@@ -427,6 +450,7 @@ apiRouter.post('/attendance/clock-in', requireAuth, requireApprovedStudent, asyn
     clock_in_device_label: deviceLabel(userAgent),
     status: 'clocked_in',
     report_submitted: false,
+    attendance_day: dayKey,
     latitude: numLat,
     longitude: numLng,
     accuracy_meters: numAcc,
@@ -578,6 +602,24 @@ apiRouter.post(
         error: 'Your attendance report has already been submitted for today.',
         code: 'REPORT_ALREADY_SUBMITTED',
       });
+    }
+
+    // 1d. Authoritative check directly against Supabase — guards against stale
+    //     in-memory caches across concurrent serverless instances or devices.
+    if (supabase) {
+      const { data: existingReport, error: reportLookupError } = await supabase
+        .from('reports')
+        .select('id')
+        .eq('attendance_record_id', attendanceRecord.id)
+        .limit(1)
+        .maybeSingle();
+      if (!reportLookupError && existingReport) {
+        cleanupTempFiles();
+        return res.status(409).json({
+          error: 'Your attendance report has already been submitted for today.',
+          code: 'REPORT_ALREADY_SUBMITTED',
+        });
+      }
     }
 
     if (!title || !title.trim()) {
