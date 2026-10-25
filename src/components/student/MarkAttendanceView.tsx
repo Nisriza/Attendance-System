@@ -64,6 +64,23 @@ export const MarkAttendanceView: React.FC<MarkAttendanceViewProps> = ({
   const [declarationAccepted, setDeclarationAccepted] = useState(false);
   const [currentTime, setCurrentTime] = useState<string>(new Date().toLocaleTimeString());
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [noteDismissedFor, setNoteDismissedFor] = useState<string | null>(null);
+
+  // Show the Important clock-out notice (Borang R9) at the clock-out stage:
+  // either right after a report submission (via App flag) or whenever the
+  // student reaches this screen with a submitted report they haven't
+  // acknowledged the notice for yet.
+  const showImportantNote = Boolean(
+    showPostReportNote ||
+      (activeRecord?.status === 'clocked_in' &&
+        activeRecord.report_submitted &&
+        noteDismissedFor !== activeRecord.id)
+  );
+
+  const dismissImportantNote = () => {
+    if (activeRecord) setNoteDismissedFor(activeRecord.id);
+    onDismissPostReportNote?.();
+  };
 
   const loadAttendanceState = async () => {
     try {
@@ -466,7 +483,7 @@ export const MarkAttendanceView: React.FC<MarkAttendanceViewProps> = ({
         )}
       </div>
 
-      {showPostReportNote && (
+      {showImportantNote && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/50">
           <div className="bg-white rounded-2xl sm:rounded-3xl w-full max-w-sm sm:max-w-md max-h-[90vh] overflow-y-auto p-4 sm:p-6 shadow-xl space-y-3 sm:space-y-4">
             <div className="flex items-center gap-2">
@@ -479,7 +496,7 @@ export const MarkAttendanceView: React.FC<MarkAttendanceViewProps> = ({
             </p>
             <button
               type="button"
-              onClick={() => onDismissPostReportNote?.()}
+              onClick={dismissImportantNote}
               className="w-full py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 transition-colors"
             >
               OK
