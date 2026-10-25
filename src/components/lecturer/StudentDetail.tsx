@@ -7,7 +7,7 @@ import {
   CalendarCheck2,
   FileCheck2,
   MapPin,
-  Eye,
+
   Download,
   Loader2,
   Calendar,
@@ -371,20 +371,6 @@ export const StudentDetail: React.FC<StudentDetailProps> = ({ studentId, onBack 
                           {att.original_name}
                         </span>
                         <div className="flex items-center gap-1 border-l border-slate-200 pl-2">
-                          <button
-                            onClick={() =>
-                              setPreviewModal({
-                                isOpen: true,
-                                reportId: report.id,
-                                attachment: att,
-                                reportTitle: report.title,
-                              })
-                            }
-                            className="p-1 text-slate-500 hover:text-blue-600 rounded-md transition-colors"
-                            title="Preview In-App"
-                          >
-                            <Eye className="w-3.5 h-3.5" />
-                          </button>
                           <button
                             type="button"
                             onClick={() => handleDownload(report.id, att)}

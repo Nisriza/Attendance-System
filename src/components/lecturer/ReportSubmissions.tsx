@@ -3,7 +3,7 @@ import {
   FileCheck2,
   Search,
   Download,
-  Eye,
+
   MapPin,
   CalendarCheck2,
   Loader2,
@@ -339,20 +339,6 @@ export const ReportSubmissions: React.FC = () => {
                         </span>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          onClick={() =>
-                            setPreviewData({
-                              isOpen: true,
-                              reportId: rep.id,
-                              attachment: att,
-                              reportTitle: rep.title,
-                            })
-                          }
-                          className="p-1.5 text-slate-600 hover:text-blue-600 hover:bg-white rounded-lg transition-colors shadow-2xs"
-                          title="Preview document in-app"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
                         <button
                           type="button"
                           onClick={() => handleDownload(rep.id, att)}

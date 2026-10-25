@@ -755,10 +755,27 @@ apiRouter.post(
     await db.addReport(newReport);
 
     // CRITICAL: Mark attendance record as report_submitted = true, unlocking Clock Out!
-    await db.updateAttendanceRecord(attendanceRecord.id, {
-      report_submitted: true,
-      report_id: reportId,
-    });
+    // Retry once on transient failure; if it still fails, the report is safely
+    // saved and the clock-out route self-heals the flag from the database.
+    try {
+      await db.updateAttendanceRecord(attendanceRecord.id, {
+        report_submitted: true,
+        report_id: reportId,
+      });
+    } catch (flagErr) {
+      console.warn('[Reports] report_submitted update failed, retrying once:', flagErr);
+      try {
+        await db.updateAttendanceRecord(attendanceRecord.id, {
+          report_submitted: true,
+          report_id: reportId,
+        });
+      } catch (retryErr) {
+        console.error(
+          `[Reports] Could not set report_submitted for attendance ${attendanceRecord.id} after report ${reportId} was saved. The clock-out route will self-heal from the database.`,
+          retryErr
+        );
+      }
+    }
 
     return res.status(201).json({
       message: 'Report successfully submitted and verified! You are now permitted to Clock Out.',
