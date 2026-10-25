@@ -156,10 +156,9 @@ export const SubmitReportView: React.FC<SubmitReportViewProps> = ({
       const res = await api.submitReport(formData);
       showToast('Report verified and submitted successfully! Clock-Out is now unlocked.', 'success');
       setSuccessReport(res.report);
-      // Reload active clock-in state
+      // Reload active clock-in state. Navigation is deliberate: the student
+      // proceeds via the "Proceed to Clock Out Now" (Next) button below.
       await loadData();
-      // Auto-navigate to clock-out with the mandatory notice
-      if (onReportSubmitted) onReportSubmitted();
     } catch (err: any) {
       const message = err.message || 'Failed to submit report.';
       setError(message);
@@ -225,9 +224,9 @@ export const SubmitReportView: React.FC<SubmitReportViewProps> = ({
           </div>
 
           <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
-            {onNavigateToAttendance && (
+            {onReportSubmitted && (
               <button
-                onClick={onNavigateToAttendance}
+                onClick={onReportSubmitted}
                 className="w-full sm:w-auto px-6 py-3 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md shadow-emerald-900/10 transition-colors flex items-center justify-center gap-2"
               >
                 <CheckCircle2 className="w-4 h-4" />

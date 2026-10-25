@@ -44,13 +44,26 @@ export function authMiddleware(req: AuthenticatedRequest, res: Response, next: N
     token = String(req.query.token).trim();
   }
 
-  if (token) {
-    const user = db.getUserById(token);
-    if (user) {
-      req.user = user;
-    }
+  if (!token) {
+    next();
+    return;
   }
-  next();
+
+  const cached = db.getUserById(token);
+  if (cached) {
+    req.user = cached;
+    next();
+    return;
+  }
+
+  // Cache miss (e.g. account created on another serverless instance):
+  // resolve the token against Supabase before rejecting the request.
+  db.getUserByIdFresh(token)
+    .then((user) => {
+      if (user) req.user = user;
+      next();
+    })
+    .catch(() => next());
 }
 
 function requireAuth(req: AuthenticatedRequest, res: Response, next: NextFunction) {
@@ -112,7 +125,7 @@ apiRouter.get('/database/status', (_req: Request, res: Response) => {
 // Login
 // Students: passwordless, identified by their registered full name.
 // Staff / lecturers: username + password.
-apiRouter.post('/auth/login', (req: Request, res: Response) => {
+apiRouter.post('/auth/login', asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const { role, name, fullname, username, password } = req.body;
 
   if (role === 'student') {
@@ -121,7 +134,9 @@ apiRouter.post('/auth/login', (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Please enter your full name.' });
     }
 
-    const matches = db.getStudentsByName(providedName);
+    // Fresh lookup: the local cache may not include accounts registered on
+    // another serverless instance.
+    const matches = await db.getStudentsByNameFresh(providedName);
     if (matches.length === 0) {
       return res.status(401).json({ error: 'No student account found with that full name.' });
     }
@@ -161,7 +176,7 @@ apiRouter.post('/auth/login', (req: Request, res: Response) => {
     token: user.id,
     user: safeUser,
   });
-});
+}));
 
 // Me (Current session)
 apiRouter.get('/auth/me', (req: AuthenticatedRequest, res: Response) => {
@@ -357,11 +372,14 @@ apiRouter.get('/lecturer/students/:studentId', requireAuth, requireLecturer, (re
 // ==========================================
 
 // Get Active Clock-In Status for Current Student
-apiRouter.get('/attendance/active', requireAuth, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.get('/attendance/active', requireAuth, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const user = req.user!;
   if (user.role !== 'student') {
     return res.status(400).json({ error: 'Only students have active clock-in sessions.' });
   }
+  // Read-through: refresh this student's records from Supabase so state is
+  // truthful across serverless instances, refreshes, and re-logins.
+  await db.refreshStudentAttendance(user.id);
   const activeRecord = db.getActiveClockInForStudent(user.id) || null;
   const todayRecord = db.getAttendanceByStudentOnDay(user.id) || null;
   return res.json({
@@ -370,7 +388,7 @@ apiRouter.get('/attendance/active', requireAuth, (req: AuthenticatedRequest, res
     canClockIn: !todayRecord,
     canClockOut: !!activeRecord?.report_submitted,
   });
-});
+}));
 
 // Student Clock-In (Captures real-time GPS coordinates, date, and time)
 apiRouter.post('/attendance/clock-in', requireAuth, requireApprovedStudent, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
@@ -470,13 +488,34 @@ apiRouter.post('/attendance/clock-out', requireAuth, requireApprovedStudent, asy
   const student = req.user!;
   const { latitude, longitude, accuracy_meters } = req.body;
 
-  // 1. Verify student has an active clock-in record
+  // 1. Verify student has an active clock-in record (refreshed so a session
+  //    started on another serverless instance is recognized)
+  await db.refreshStudentAttendance(student.id);
   const activeRecord = db.getActiveClockInForStudent(student.id);
   if (!activeRecord) {
     return res.status(400).json({ error: 'No active clocked-in record found to clock out from.' });
   }
 
-  // 2. MANDATORY BUSINESS RULE: Cannot clock out without submitting report
+  // 2. MANDATORY BUSINESS RULE: Cannot clock out without submitting report.
+  //    Self-heal: if a report was saved (possibly on another instance or in a
+  //    request where the follow-up update failed), trust the database record
+  //    and repair the flag instead of forcing a resubmission.
+  if (!activeRecord.report_submitted && supabase) {
+    const { data: savedReport } = await supabase
+      .from('reports')
+      .select('id')
+      .eq('attendance_record_id', activeRecord.id)
+      .limit(1)
+      .maybeSingle();
+    if (savedReport) {
+      await db.updateAttendanceRecord(activeRecord.id, {
+        report_submitted: true,
+        report_id: savedReport.id,
+      });
+      activeRecord.report_submitted = true;
+    }
+  }
+
   if (!activeRecord.report_submitted) {
     return res.status(403).json({
       error: 'Report Required. You cannot clock out until you have submitted your required progress report.',
@@ -858,14 +897,25 @@ async function sendAttachment(
       const buffer = await downloadStoredFile(attachment.storage_path);
       return res.send(buffer);
     } catch (err) {
-      console.error('[Storage] Download failed:', err);
-      return res.status(404).json({ error: 'File attachment not found in secure storage.' });
+      console.error(
+        `[Storage] Download failed for report attachment ${attachment.id} (path: ${attachment.storage_path}):`,
+        err
+      );
+      return res.status(404).json({
+        error: 'This file could not be found in secure storage. It may have been removed. Please contact your lecturer.',
+      });
     }
   }
 
   const legacyPath = getLegacyAttachmentPath(attachment);
   if (!legacyPath) {
-    return res.status(404).json({ error: 'File attachment not found in storage.' });
+    console.warn(
+      `[Storage] Legacy attachment ${attachment.id} ("${attachment.original_name}") has no storage_path and no local file — likely uploaded before cloud storage was enabled.`
+    );
+    return res.status(404).json({
+      error:
+        'This attachment was uploaded before secure cloud storage was enabled and is no longer available on the server. Please ask the student to re-submit the file if it is still needed.',
+    });
   }
   return res.sendFile(legacyPath);
 }

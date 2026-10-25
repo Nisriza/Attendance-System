@@ -123,6 +123,50 @@ class Database {
     );
   }
 
+  // --- Read-through helpers (serverless-safe) ---
+  // The in-memory cache can be stale across concurrent instances, so these
+  // fall back to a direct Supabase query and hydrate the cache on a miss.
+
+  async getUserByIdFresh(id: string): Promise<User | undefined> {
+    const cached = this.getUserById(id);
+    if (cached) return cached;
+    if (!supabase) return undefined;
+    const { data, error } = await supabase.from('users').select('*').eq('id', id).maybeSingle();
+    if (error || !data) return undefined;
+    const user = data as User;
+    this.data.users.push(user);
+    return user;
+  }
+
+  async getStudentsByNameFresh(name: string): Promise<User[]> {
+    const cached = this.getStudentsByName(name);
+    if (cached.length > 0) return cached;
+    if (!supabase) return [];
+    const { data, error } = await supabase.from('users').select('*').eq('role', 'student');
+    if (error || !data) return [];
+    const known = new Set(this.data.users.map((u) => u.id));
+    (data as User[]).forEach((u) => {
+      if (!known.has(u.id)) this.data.users.push(u);
+    });
+    return this.getStudentsByName(name);
+  }
+
+  async refreshStudentAttendance(studentId: string): Promise<void> {
+    if (!supabase) return;
+    const { data, error } = await supabase
+      .from('attendance_records')
+      .select('*')
+      .eq('student_id', studentId);
+    if (error) {
+      console.error('[DB] Failed to refresh student attendance:', error.message);
+      return;
+    }
+    this.data.attendance_records = this.data.attendance_records.filter(
+      (r) => r.student_id !== studentId
+    );
+    this.data.attendance_records.push(...((data as AttendanceRecord[]) || []));
+  }
+
   async addUser(user: User): Promise<User> {
     await this.insertRow('users', user, 'users');
     this.data.users.push(user);
