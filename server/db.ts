@@ -31,8 +31,28 @@ class Database {
     reports: [],
   };
 
+  private lastLoadedAt = 0;
+  private refreshInFlight: Promise<void> | null = null;
+
   isUsingSupabase(): boolean {
     return isSupabaseConfigured;
+  }
+
+  // Re-loads data from Supabase when the cache is older than ttlMs, so changes
+  // made directly in the database are reflected in the app almost immediately.
+  // Concurrent calls share a single refresh.
+  async refreshIfStale(ttlMs: number): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) return;
+    if (Date.now() - this.lastLoadedAt < ttlMs) return;
+    if (this.refreshInFlight) return this.refreshInFlight;
+    this.refreshInFlight = this.init()
+      .catch((err) => {
+        console.error('[DB] Background refresh failed (serving cached data):', err?.message || err);
+      })
+      .finally(() => {
+        this.refreshInFlight = null;
+      });
+    return this.refreshInFlight;
   }
 
   async init(): Promise<void> {
@@ -65,6 +85,7 @@ class Database {
     console.log(
       `✅ Loaded ${this.data.users.length} users, ${this.data.attendance_records.length} attendance records, ${this.data.reports.length} reports from Supabase.`
     );
+    this.lastLoadedAt = Date.now();
   }
 
   private client() {

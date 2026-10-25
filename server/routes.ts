@@ -19,6 +19,15 @@ import {
 
 export const apiRouter = express.Router();
 
+// Keep the in-memory cache in sync with Supabase: data edited or deleted
+// directly in the database is reflected in the app within a few seconds.
+const CACHE_REFRESH_TTL_MS = 3000;
+apiRouter.use((req: Request, res: Response, next: NextFunction) => {
+  db.refreshIfStale(CACHE_REFRESH_TTL_MS)
+    .then(() => next())
+    .catch(() => next());
+});
+
 // Middleware: session-like user auth via Authorization header (e.g. "Bearer <userId>")
 export interface AuthenticatedRequest extends Request {
   user?: User;
