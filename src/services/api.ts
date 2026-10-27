@@ -161,12 +161,14 @@ export const api = {
   // Attendance (Clock In / Out)
   async getActiveClockIn(): Promise<{
     activeRecord: AttendanceRecord | null;
+    staleOpenRecord: AttendanceRecord | null;
     todayRecord: AttendanceRecord | null;
     canClockIn: boolean;
     canClockOut: boolean;
   }> {
     return request<{
       activeRecord: AttendanceRecord | null;
+      staleOpenRecord: AttendanceRecord | null;
       todayRecord: AttendanceRecord | null;
       canClockIn: boolean;
       canClockOut: boolean;
@@ -190,6 +192,7 @@ export const api = {
     longitude: number;
     accuracy_meters: number;
     device_id?: string;
+    record_id?: string;
   }): Promise<{ message: string; record: AttendanceRecord }> {
     return request<{ message: string; record: AttendanceRecord }>('/attendance/clock-out', {
       method: 'POST',

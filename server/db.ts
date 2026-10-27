@@ -217,9 +217,28 @@ class Database {
   }
 
   getActiveClockInForStudent(studentId: string): AttendanceRecord | undefined {
-    return this.data.attendance_records.find(
-      (r) => r.student_id === studentId && r.status === 'clocked_in'
-    );
+    // Most recent open record first — deterministic regardless of cache order.
+    return this.data.attendance_records
+      .filter((r) => r.student_id === studentId && r.status === 'clocked_in')
+      .sort((a, b) =>
+        (b.clock_in_time || b.server_timestamp).localeCompare(a.clock_in_time || a.server_timestamp)
+      )[0];
+  }
+
+  // An open ('clocked_in') record from a previous attendance day — i.e. a
+  // forgotten clock-out that the student may still complete late.
+  getStaleOpenClockInForStudent(studentId: string): AttendanceRecord | undefined {
+    const today = todayKey();
+    return this.data.attendance_records
+      .filter(
+        (r) =>
+          r.student_id === studentId &&
+          r.status === 'clocked_in' &&
+          !isSameAttendanceDay(r.clock_in_time || r.server_timestamp, today)
+      )
+      .sort((a, b) =>
+        (b.clock_in_time || b.server_timestamp).localeCompare(a.clock_in_time || a.server_timestamp)
+      )[0];
   }
 
   getAttendanceByStudent(studentId: string): AttendanceRecord[] {
