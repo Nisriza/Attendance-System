@@ -1,6 +1,6 @@
 export type UserRole = 'lecturer' | 'student';
 export type UserStatus = 'pending_approval' | 'approved' | 'rejected';
-export type AttendanceStatus = 'clocked_in' | 'clocked_out';
+export type AttendanceStatus = 'clocked_in' | 'clocked_out' | 'forgot_clock_out';
 
 export interface User {
   id: string;

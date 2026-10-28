@@ -136,6 +136,10 @@ export const MyAttendanceView: React.FC = () => {
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
                             Completed
                           </span>
+                        ) : rec.status === 'forgot_clock_out' ? (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                            Forgot to Clock Out
+                          </span>
                         ) : (
                           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200 flex items-center gap-1 w-max">
                             <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-ping" />

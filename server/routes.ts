@@ -386,21 +386,16 @@ apiRouter.get('/attendance/active', requireAuth, asyncHandler(async (req: Authen
   if (user.role !== 'student') {
     return res.status(400).json({ error: 'Only students have active clock-in sessions.' });
   }
+  // Lazily mark any still-open session from a previous attendance day as a
+  // missed clock-out, then read the current (today's) session state.
+  await db.expireForgottenClockIns();
   // Read-through: refresh this student's records from Supabase so state is
   // truthful across serverless instances, refreshes, and re-logins.
   await db.refreshStudentAttendance(user.id);
-  const openRecord = db.getActiveClockInForStudent(user.id) || null;
-  // "Active" for the UI means today's session; an open record from a previous
-  // day is a forgotten clock-out and is reported separately.
-  const activeRecord =
-    openRecord && isSameAttendanceDay(openRecord.clock_in_time || openRecord.server_timestamp)
-      ? openRecord
-      : null;
-  const staleOpenRecord = db.getStaleOpenClockInForStudent(user.id) || null;
+  const activeRecord = db.getActiveClockInForStudent(user.id) || null;
   const todayRecord = db.getAttendanceByStudentOnDay(user.id) || null;
   return res.json({
     activeRecord,
-    staleOpenRecord,
     todayRecord,
     canClockIn: !todayRecord,
     canClockOut: !!activeRecord?.report_submitted,
@@ -503,26 +498,15 @@ apiRouter.post('/attendance/clock-in', requireAuth, requireApprovedStudent, asyn
 // Student Clock-Out (CRITICAL RULE: Cannot clock out without submitting a report!)
 apiRouter.post('/attendance/clock-out', requireAuth, requireApprovedStudent, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const student = req.user!;
-  const { latitude, longitude, accuracy_meters, record_id } = req.body;
+  const { latitude, longitude, accuracy_meters } = req.body;
 
   // 1. Verify student has an active clock-in record (refreshed so a session
-  //    started on another serverless instance is recognized).
-  //    record_id targets a specific record — the late clock-out path for a
-  //    previous day's forgotten clock-out.
+  //    started on another serverless instance is recognized). Sessions from
+  //    previous attendance days are auto-expired as forgotten clock-outs
+  //    before this runs, so only the current-day session can be clocked out.
   await db.refreshStudentAttendance(student.id);
-  let activeRecord: AttendanceRecord | undefined;
-  if (record_id && typeof record_id === 'string') {
-    const target = db.getAttendanceRecordById(record_id);
-    if (!target || target.student_id !== student.id) {
-      return res.status(404).json({ error: 'Attendance record not found.' });
-    }
-    if (target.status !== 'clocked_in') {
-      return res.status(400).json({ error: 'This attendance record has already been clocked out.' });
-    }
-    activeRecord = target;
-  } else {
-    activeRecord = db.getActiveClockInForStudent(student.id);
-  }
+  await db.expireForgottenClockIns();
+  const activeRecord: AttendanceRecord | undefined = db.getActiveClockInForStudent(student.id);
   if (!activeRecord) {
     return res.status(400).json({ error: 'No active clocked-in record found to clock out from.' });
   }
@@ -597,9 +581,13 @@ apiRouter.post('/attendance/clock-out', requireAuth, requireApprovedStudent, asy
 }));
 
 // List Attendance Records
-apiRouter.get('/attendance', requireAuth, (req: AuthenticatedRequest, res: Response) => {
+apiRouter.get('/attendance', requireAuth, asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   const user = req.user!;
   const { studentId } = req.query;
+
+  // Lazily mark open sessions from previous attendance days as missed
+  // clock-outs so logs and admin views stay consistent.
+  await db.expireForgottenClockIns();
 
   if (user.role === 'lecturer') {
     let records = db.getAttendanceByLecturer(user.id);
@@ -613,7 +601,7 @@ apiRouter.get('/attendance', requireAuth, (req: AuthenticatedRequest, res: Respo
     return res.json(records);
   }
   return res.status(400).json({ error: 'Invalid role.' });
-});
+}));
 
 // =========================================================================
 // MANDATORY ATTENDANCE BEFORE REPORT SUBMISSION (CRITICAL BUSINESS RULE)

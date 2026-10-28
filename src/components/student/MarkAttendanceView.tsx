@@ -47,7 +47,6 @@ export const MarkAttendanceView: React.FC<MarkAttendanceViewProps> = ({
 
   const [activeRecord, setActiveRecord] = useState<AttendanceRecord | null>(null);
   const [todayRecord, setTodayRecord] = useState<AttendanceRecord | null>(null);
-  const [staleRecord, setStaleRecord] = useState<AttendanceRecord | null>(null);
   const [loading, setLoading] = useState(true);
 
   const [livePosition, setLivePosition] = useState<{
@@ -60,7 +59,6 @@ export const MarkAttendanceView: React.FC<MarkAttendanceViewProps> = ({
 
   const [clockingIn, setClockingIn] = useState(false);
   const [clockingOut, setClockingOut] = useState(false);
-  const [clockingOutLate, setClockingOutLate] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [declarationAccepted, setDeclarationAccepted] = useState(false);
@@ -89,7 +87,6 @@ export const MarkAttendanceView: React.FC<MarkAttendanceViewProps> = ({
       const data = await api.getActiveClockIn();
       setActiveRecord(data.activeRecord);
       setTodayRecord(data.todayRecord);
-      setStaleRecord(data.staleOpenRecord || null);
     } catch (err: any) {
       console.error('Failed to load attendance state:', err);
     } finally {
@@ -223,37 +220,6 @@ export const MarkAttendanceView: React.FC<MarkAttendanceViewProps> = ({
     }
   };
 
-  // Late clock-out for a previous day's forgotten clock-out. Uses the same
-  // GPS + server flow, targeting the specific old record via record_id.
-  const handleLateClockOut = async () => {
-    if (!staleRecord) return;
-
-    if (!staleRecord.report_submitted) {
-      setError('The report for that day was never submitted, so this record cannot be clocked out.');
-      return;
-    }
-
-    setError(null);
-    setClockingOutLate(true);
-    try {
-      const position = await requestLocation();
-      const { latitude, longitude, accuracy } = position.coords;
-      const res = await api.clockOut({
-        latitude,
-        longitude,
-        accuracy_meters: accuracy,
-        device_id: getDeviceId(),
-        record_id: staleRecord.id,
-      });
-      showToast(res.message || 'Late clock-out recorded successfully!', 'success');
-      await loadAttendanceState();
-    } catch (err: any) {
-      setError(err.message || 'Failed to record the late clock-out.');
-    } finally {
-      setClockingOutLate(false);
-    }
-  };
-
   if (loading) {
     return (
       <div className="bg-white p-12 rounded-3xl border border-slate-200 shadow-xs flex flex-col items-center justify-center gap-3 text-slate-500">
@@ -331,56 +297,6 @@ export const MarkAttendanceView: React.FC<MarkAttendanceViewProps> = ({
         locationError={locationError}
         onLocate={() => requestLocation().catch(() => {})}
       />
-
-      {/* Missed clock-out from a previous day — offer a late clock-out without
-          affecting today's session */}
-      {staleRecord && (
-        <div className="bg-white p-4 sm:p-6 rounded-3xl border border-amber-300 shadow-xs space-y-3">
-          <div className="flex items-start gap-2.5">
-            <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-            <div>
-              <h3 className="text-sm font-bold text-amber-950">Forgot to clock out</h3>
-              <p className="text-xs text-amber-800 mt-0.5 leading-relaxed">
-                You did not clock out for your session on{' '}
-                <strong>
-                  {new Date(staleRecord.clock_in_time).toLocaleDateString(undefined, {
-                    weekday: 'short',
-                    month: 'short',
-                    day: 'numeric',
-                    year: 'numeric',
-                  })}
-                </strong>{' '}
-                (clocked in at{' '}
-                {new Date(staleRecord.clock_in_time).toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-                ). You can still complete that clock-out now — the actual clock-out time will be
-                recorded, and today's attendance is tracked separately.
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={handleLateClockOut}
-            disabled={clockingOutLate || locating || !staleRecord.report_submitted}
-            className="w-full sm:w-auto px-5 py-3 rounded-2xl text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 transition-colors shadow-xs flex items-center justify-center gap-2 disabled:opacity-60"
-          >
-            {clockingOutLate ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Recording late clock-out...
-              </>
-            ) : (
-              <>
-                <Unlock className="w-4 h-4" />
-                Clock Out Now (Late){' '}
-                {staleRecord.report_submitted ? '' : '— report for that day missing'}
-              </>
-            )}
-          </button>
-        </div>
-      )}
 
       <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-5">
         {error && (

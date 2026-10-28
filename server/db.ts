@@ -225,20 +225,31 @@ class Database {
       )[0];
   }
 
-  // An open ('clocked_in') record from a previous attendance day — i.e. a
-  // forgotten clock-out that the student may still complete late.
-  getStaleOpenClockInForStudent(studentId: string): AttendanceRecord | undefined {
-    const today = todayKey();
-    return this.data.attendance_records
-      .filter(
-        (r) =>
-          r.student_id === studentId &&
-          r.status === 'clocked_in' &&
-          !isSameAttendanceDay(r.clock_in_time || r.server_timestamp, today)
-      )
-      .sort((a, b) =>
-        (b.clock_in_time || b.server_timestamp).localeCompare(a.clock_in_time || a.server_timestamp)
-      )[0];
+  // Marks any still-open ('clocked_in') attendance record that belongs to a
+  // previous attendance day as 'forgot_clock_out'. Called before serving reads
+  // so missed clock-outs surface consistently across views and the database.
+  async expireForgottenClockIns(): Promise<void> {
+    if (!isSupabaseConfigured || !supabase) return;
+    const { data, error } = await supabase
+      .from('attendance_records')
+      .select('id')
+      .eq('status', 'clocked_in');
+    if (error || !data) return;
+
+    const openIds = (data as Array<{ id: string }>).map((r) => r.id);
+    for (const id of openIds) {
+      const record = this.getAttendanceRecordById(id);
+      if (!record) continue;
+      if (isSameAttendanceDay(record.clock_in_time || record.server_timestamp, todayKey())) continue;
+      await this.updateRow('attendance_records', id, { status: 'forgot_clock_out' }, 'attendance_records');
+      const idx = this.data.attendance_records.findIndex((r) => r.id === id);
+      if (idx >= 0) {
+        this.data.attendance_records[idx] = {
+          ...this.data.attendance_records[idx],
+          status: 'forgot_clock_out',
+        };
+      }
+    }
   }
 
   getAttendanceByStudent(studentId: string): AttendanceRecord[] {

@@ -153,6 +153,7 @@ export const AttendanceRecords: React.FC = () => {
             <option value="all">All Attendance Statuses</option>
             <option value="clocked_in">Currently Clocked In</option>
             <option value="clocked_out">Completed (Clocked Out)</option>
+            <option value="forgot_clock_out">Forgot to Clock Out</option>
           </select>
         </div>
 
@@ -303,6 +304,10 @@ export const AttendanceRecords: React.FC = () => {
                           {isOut ? (
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
                               Completed ({formatDuration(rec.duration_minutes)})
+                            </span>
+                          ) : rec.status === 'forgot_clock_out' ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                              Forgot to Clock Out
                             </span>
                           ) : (
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200 flex items-center gap-1">
